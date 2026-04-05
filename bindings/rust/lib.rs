@@ -42,7 +42,9 @@ mod tests {
         parser
             .set_language(&super::language())
             .expect("Error loading Gxl grammar");
-        let tree = parser.parse(code, None).expect("parse should return a tree");
+        let tree = parser
+            .parse(code, None)
+            .expect("parse should return a tree");
         assert!(
             !tree.root_node().has_error(),
             "unexpected parse error: {}",
