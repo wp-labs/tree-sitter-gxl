@@ -12,122 +12,180 @@ module.exports = grammar({
 
     _top_level_item: ($) => choice($.module, $.extern_module),
 
-    // ── Comments ──
-    // # line comment (but NOT #[ which starts an annotation)
     comment: (_$) => token(/#([^\[\n][^\n]*)?/),
 
-    // ── Annotations ──
-    annotation: ($) =>
+    annotation: ($) => seq("#[", commaSep1($.annotation_item), "]"),
+
+    annotation_item: ($) =>
       seq(
-        "#[",
         field("name", $.identifier),
-        optional(seq("(", commaSep1($.annotation_arg), ")")),
-        "]",
+        optional(seq("(", optional(commaSep1($.annotation_arg)), ")")),
       ),
 
     annotation_arg: ($) =>
       choice(
-        seq(field("key", $.identifier), "=", field("value", $.string)),
-        $.string,
+        seq(
+          field("key", $.identifier),
+          choice("=", ":"),
+          field("value", $._value),
+        ),
+        $._value,
       ),
 
-    // ── Extern module ──
     extern_module: ($) =>
       seq(
         "extern",
         "mod",
         commaSep1(field("name", $.identifier)),
         "{",
-        choice($.path_source, $.git_source),
+        repeat($.extern_source_entry),
         "}",
         optional(";"),
       ),
 
-    path_source: ($) => seq("path", "=", $.string, ";"),
+    extern_source_entry: ($) =>
+      seq(field("key", $.extern_key), "=", field("value", $.string), choice(",", ";")),
 
-    git_source: ($) =>
-      seq("git", "=", $.string, ",", "channel", "=", $.string, ";"),
+    extern_key: (_$) => choice("path", "git", "branch", "channel", "tag"),
 
-    // ── Module ──
     module: ($) =>
       seq(
         repeat($.annotation),
         "mod",
         field("name", $.identifier),
-        optional(seq(":", $.ref_list)),
+        optional(seq(":", $.mix_list)),
         "{",
         repeat($._module_item),
         "}",
         optional(";"),
       ),
 
-    ref_list: ($) => commaSep1($.identifier),
+    mix_list: ($) => commaSep1(choice($.identifier, $.var_ref)),
 
     _module_item: ($) =>
       choice(
         $.property,
         $.environment,
         $.flow_definition,
-        $.flow_reference,
         $.function_def,
         $.activity,
       ),
 
-    // ── Property ──
     property: ($) =>
-      seq(
-        field("key", $.identifier),
-        "=",
-        field("value", choice($.string, $.number)),
-        ";",
-      ),
+      seq(field("key", $.identifier), "=", field("value", $._value), choice(",", ";")),
 
-    // ── Environment ──
     environment: ($) =>
       seq(
         repeat($.annotation),
         "env",
         field("name", $.identifier),
-        optional(seq(":", $.ref_list)),
+        optional(seq(":", $.mix_list)),
+        choice(";", seq("{", repeat($._env_item), "}", optional(";"))),
+      ),
+
+    _env_item: ($) => choice($.property, $.gx_vars_block, $.command_stmt, $.if_stmt, $.for_stmt),
+
+    gx_vars_block: ($) =>
+      seq(
+        "gx.vars",
         "{",
-        repeat($._env_item),
+        optional(choice($.command_args, repeat1($.property))),
         "}",
         optional(";"),
       ),
 
-    _env_item: ($) => choice($.property, $.command_stmt, $.gx_vars_block),
-
-    gx_vars_block: ($) =>
-      seq("gx.vars", "{", optional($.command_props), "}"),
-
-    // ── Flow ──
     flow_definition: ($) =>
       seq(
         repeat($.annotation),
         "flow",
-        optional(seq($.ref_list, "|")),
-        "@",
-        field("name", $.identifier),
-        optional(seq("|", $.ref_list)),
-        "{",
-        repeat($._flow_item),
-        "}",
-        optional(";"),
+        field("head", $.flow_head),
+        choice(";", seq("{", repeat($._block_item), "}", optional(";"))),
       ),
 
-    flow_reference: ($) =>
+    flow_head: ($) => choice($.flow_head_at, $.flow_head_colon, $.flow_head_pipe),
+
+    flow_head_at: ($) =>
+      prec(
+        3,
+        seq(
+          "@",
+          field("name", $.identifier),
+          optional(seq("|", field("after", $.flow_pipe))),
+        ),
+      ),
+
+    flow_head_colon: ($) =>
       seq(
-        repeat($.annotation),
-        "flow",
         field("name", $.identifier),
         ":",
-        $.ref_list,
-        ";",
+        field("before", $.flow_list),
+        optional(seq(":", field("after", $.flow_list))),
       ),
 
-    _flow_item: ($) => choice($.command_stmt, $.property),
+    flow_head_pipe: ($) =>
+      prec.right(
+        1,
+        seq(field("name", $.identifier), optional(seq("|", field("after", $.flow_pipe)))),
+      ),
 
-    // ── Function ──
+    flow_list: ($) => commaSep1($.flow_ref),
+
+    flow_pipe: ($) => prec.right(pipeSep1($.flow_ref)),
+
+    flow_ref: ($) => choice($.dotted_name, $.identifier, $.var_ref),
+
+    _block_item: ($) => choice($.property, $.if_stmt, $.for_stmt, $.command_stmt),
+
+    if_stmt: ($) =>
+      seq(
+        "if",
+        field("condition", $.condition_expr),
+        field("body", $.block),
+        repeat(seq("else", "if", field("elseif", $.condition_expr), field("elseif_body", $.block))),
+        optional(seq("else", field("else_body", $.block))),
+      ),
+
+    for_stmt: ($) =>
+      seq(
+        "for",
+        field("item", $.var_ref),
+        "in",
+        field("iterable", choice($.var_ref, $.dotted_name, $.identifier)),
+        field("body", $.block),
+      ),
+
+    block: ($) => seq("{", repeat($._block_item), "}"),
+
+    condition_expr: ($) =>
+      prec.right(
+        repeat1(
+          choice(
+            $.condition_call,
+            $.var_ref,
+            $.dotted_name,
+            $.identifier,
+            $.string,
+            $.number,
+            $.boolean,
+            "==",
+            "!=",
+            ">=",
+            "<=",
+            ">",
+            "<",
+            "&&",
+            "||",
+            "!",
+            "=*",
+            "(",
+            ")",
+          ),
+        ),
+      ),
+
+    condition_call: ($) =>
+      prec(1, seq(field("target", $.identifier), "(", optional(commaSep1($._value)), ")")),
+
     function_def: ($) =>
       seq(
         repeat($.annotation),
@@ -137,7 +195,7 @@ module.exports = grammar({
         optional($.function_params),
         ")",
         "{",
-        repeat($.command_stmt),
+        repeat($._block_item),
         "}",
         optional(";"),
       ),
@@ -148,10 +206,9 @@ module.exports = grammar({
       seq(
         optional("*"),
         field("name", $.identifier),
-        optional(seq("=", field("default", $.string))),
+        optional(seq("=", field("default", $._value))),
       ),
 
-    // ── Activity ──
     activity: ($) =>
       seq(
         repeat($.annotation),
@@ -163,17 +220,10 @@ module.exports = grammar({
         optional(";"),
       ),
 
-    // ── Commands ──
-    command_stmt: ($) =>
-      seq(choice($.builtin_command, $.call_expression), ";"),
+    command_stmt: ($) => seq(choice($.builtin_command, $.call_expression), optional(";")),
 
     builtin_command: ($) =>
-      seq(
-        field("name", $.builtin_name),
-        "(",
-        optional($.command_props),
-        ")",
-      ),
+      seq(field("name", $.builtin_name), "(", optional($.command_args), ")"),
 
     builtin_name: (_$) =>
       token(
@@ -181,46 +231,66 @@ module.exports = grammar({
           "gx.echo",
           "gx.vars",
           "gx.cmd",
+          "gx.shell",
+          "gx.run",
           "gx.read",
-          "gx.tpl",
-          "gx.assert",
-          "gx.ver",
           "gx.read_cmd",
           "gx.read_stdin",
           "gx.read_file",
+          "gx.tpl",
+          "gx.assert",
+          "gx.ver",
+          "gx.tar",
+          "gx.untar",
+          "gx.download",
+          "gx.upload",
+          "gx.patch_file",
         ),
       ),
 
     call_expression: ($) =>
-      seq(
-        field("target", choice($.dotted_name, $.identifier)),
-        "(",
-        optional($.command_props),
-        ")",
-      ),
+      seq(field("target", choice($.dotted_name, $.identifier)), "(", optional($.command_args), ")"),
 
     dotted_name: ($) => seq($.identifier, repeat1(seq(".", $.identifier))),
 
-    command_props: ($) => commaSep1($.command_prop),
+    command_args: ($) => commaSep1(choice($.command_prop, $._value)),
 
-    command_prop: ($) =>
-      seq(
-        field("key", $.identifier),
-        ":",
-        field("value", choice($.string, $.identifier)),
+    command_prop: ($) => seq(field("key", $.identifier), ":", field("value", $._value)),
+
+    list: ($) => seq("[", optional(commaSep1($._value)), "]"),
+
+    object: ($) => seq("{", optional(commaSep1($.object_item)), "}"),
+
+    object_item: ($) => seq(field("key", $.identifier), ":", field("value", $._value)),
+
+    _value: ($) =>
+      choice(
+        $.var_ref,
+        $.string,
+        $.number,
+        $.boolean,
+        $.dotted_name,
+        $.identifier,
+        $.list,
+        $.object,
       ),
 
-    // ── Literals ──
-    string: (_$) =>
-      token(seq('"', repeat(choice(/[^"\\]/, /\\./)), '"')),
+    var_ref: (_$) => token(seq("${", /[^}\n]+/, "}")),
+
+    string: (_$) => token(seq('"', repeat(choice(/[^"\\]/, /\\./)), '"')),
 
     number: (_$) => /\d+(\.\d+)?/,
 
-    // ── Identifier ──
+    boolean: (_$) => choice("true", "false"),
+
     identifier: (_$) => /[a-zA-Z_][a-zA-Z0-9_]*/,
   },
 });
 
 function commaSep1(rule) {
   return seq(rule, repeat(seq(",", rule)));
+}
+
+function pipeSep1(rule) {
+  return seq(rule, repeat(seq("|", rule)));
 }

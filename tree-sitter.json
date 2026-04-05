@@ -5,7 +5,8 @@
       "camelCase": "gxl",
       "scope": "source.gxl",
       "path": ".",
-      "file-types": ["gxl"]
+      "file-types": ["gxl"],
+      "highlights": "queries/highlights.scm"
     }
   ],
   "metadata": {

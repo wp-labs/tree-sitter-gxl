@@ -17,8 +17,8 @@ mod my_module : mod_a, mod_b {
     env test : dev {
         root = "${HOME}/test_project";
         gx.vars {
-            name : "TEST_VAR",
-            cmd  : "echo hello"
+            name = "TEST_VAR";
+            cmd = "echo hello";
         }
     }
 
@@ -38,8 +38,8 @@ mod my_module : mod_a, mod_b {
         retry_count = 3;
     }
 
-    # flow definition (pipeline with before/after)
-    flow before_flow | @my_flow | after_flow {
+    # flow definition (with before/after lists)
+    flow my_flow : before_flow : after_flow {
         gx.echo (value : "Hello from my_flow");
         task_runner.run (
             param1 : "value1",

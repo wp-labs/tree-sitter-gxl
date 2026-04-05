@@ -1,10 +1,10 @@
-; GXL Syntax Highlighting for Zed
-; In Zed the LAST matching pattern wins.
+; GXL highlighting aligned with current flow/env/extern syntax.
 
-; ── Plain identifier (lowest priority — must be FIRST) ──
+; Lowest priority
 (identifier) @variable
+(var_ref) @variable
 
-; ── Keywords ──
+; Keywords
 [
   "mod"
   "env"
@@ -12,122 +12,106 @@
   "fn"
   "activity"
   "extern"
+  "if"
+  "else"
+  "for"
+  "in"
 ] @keyword
 
-; ── Keyword operators ──
 "@" @keyword
 
-; ── Property keywords in extern module ──
+; Builtins / constants
+(builtin_name) @function.builtin
+(boolean) @constant.builtin
+
+; Operators and punctuation
 [
-  "path"
-  "git"
-  "channel"
-] @keyword
+  "="
+  "|"
+  ":"
+  "*"
+  "=="
+  "!="
+  ">="
+  "<="
+  ">"
+  "<"
+  "&&"
+  "||"
+  "!"
+  "=*"
+] @operator
 
-; ── Operators ──
-["=" "|" ":" "*"] @operator
-
-; ── Brackets ──
-["(" ")" "{" "}"] @punctuation.bracket
-
-; ── Annotation delimiters ──
+["(" ")" "{" "}" "[" "]"] @punctuation.bracket
 "#[" @punctuation.special
-"]" @punctuation.bracket
-
-; ── Delimiters ──
 ["," ";"] @punctuation.delimiter
 
-; ── Comments ──
+; Comments / literals
 (comment) @comment
-
-; ── String literals ──
 (string) @string
-
-; ── Number literals ──
 (number) @number
 
-; ── Annotations ──
-(annotation
+; Annotations
+(annotation_item
   name: (identifier) @attribute)
 
 (annotation_arg
   key: (identifier) @attribute)
 
-(annotation_arg
-  (string) @string)
-
-; ── Module definition ──
+; Module / environment / flow names
 (module
   name: (identifier) @type.definition)
 
-; ── Module ref list ──
-(module
-  (ref_list (identifier) @type))
-
-; ── Extern module name ──
-(extern_module
-  name: (identifier) @type)
-
-; ── Environment name ──
 (environment
   name: (identifier) @type.definition)
 
-(environment
-  (ref_list (identifier) @type))
-
-; ── Flow definition name ──
-(flow_definition
-  name: (identifier) @function.definition)
-
-(flow_definition
-  (ref_list (identifier) @function))
-
-; ── Flow reference name ──
-(flow_reference
-  name: (identifier) @function)
-
-(flow_reference
-  (ref_list (identifier) @function))
-
-; ── Function definition name ──
-(function_def
-  name: (identifier) @function.definition)
-
-; ── Function parameter ──
-(function_param
-  name: (identifier) @variable.parameter)
-
-(function_param
-  default: (string) @string)
-
-; ── Activity name ──
 (activity
   name: (identifier) @type.definition)
 
-; ── Built-in command name (gx.echo, gx.cmd, etc.) ──
-(builtin_name) @function.builtin
+(function_def
+  name: (identifier) @function.definition)
 
-; ── gx.vars block keyword ──
-"gx.vars" @function.builtin
+(function_param
+  name: (identifier) @variable.parameter)
 
-; ── Call expression target ──
-(call_expression
-  target: (dotted_name) @function)
+(flow_head_at
+  name: (identifier) @function.definition)
 
+(flow_head_colon
+  name: (identifier) @function.definition)
+
+(flow_head_pipe
+  name: (identifier) @function.definition)
+
+(flow_ref
+  (identifier) @function)
+
+(flow_ref
+  (dotted_name) @function)
+
+; Extern modules / keys
+(extern_module
+  (identifier) @type)
+
+(extern_source_entry
+  key: (extern_key) @keyword)
+
+; Calls
 (call_expression
   target: (identifier) @function)
 
-; ── Command prop key ──
-(command_prop
-  key: (identifier) @property)
+(call_expression
+  target: (dotted_name) @function)
 
-(command_prop
-  value: (identifier) @variable)
+(condition_call
+  target: (identifier) @function)
 
-; ── Property key/value ──
+; Props / args
 (property
   key: (identifier) @property)
 
-; ── Path/git source ──
-(path_source (string) @string)
-(git_source (string) @string)
+(command_prop
+  key: (identifier) @property)
+
+(object_item
+  key: (identifier) @property)
